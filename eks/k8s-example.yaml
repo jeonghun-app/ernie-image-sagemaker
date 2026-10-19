@@ -1,0 +1,59 @@
+# Copyright (c) 2026 ernie-image-sagemaker contributors
+# SPDX-License-Identifier: Apache-2.0
+# Example only: a Pod that calls the ERNIE-Image SageMaker endpoint with EKS Pod Identity.
+# Replace every <...> value. Before applying:
+#   aws eks create-pod-identity-association --cluster-name <cluster> --namespace image-gen \
+#     --service-account image-gen --role-arn <role with sagemaker:InvokeEndpoint + translate:TranslateText>
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: image-gen
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-gen
+  namespace: image-gen
+  # For IRSA instead of Pod Identity:
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/<role>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: image-gen-config
+  namespace: image-gen
+data:
+  AWS_REGION: "<region>"                      # e.g. ap-northeast-2, the region of the endpoint
+  SM_ENDPOINT_NAME: "<EndpointName>"          # last line of ./ernie.sh status
+  SM_INFERENCE_COMPONENT: "<InferenceComponentName>"
+  # Sum over all Pods must stay <= model copies (instances x 4): replicas x SM_MAX_IN_FLIGHT <= copies.
+  # 1 instance = 4 copies -> replicas 1; 2 instances = 8 copies -> replicas 2.
+  SM_MAX_IN_FLIGHT: "4"
+  SM_SOURCE_LANG: "ko"                        # language of your prompts; "en" skips Amazon Translate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-gen
+  namespace: image-gen
+spec:
+  replicas: 1            # = model copies / SM_MAX_IN_FLIGHT. Fixed: no HPA beyond that
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 0, maxUnavailable: 1 }   # never more Pods than the limit during a rollout
+  selector:
+    matchLabels: { app: image-gen }
+  template:
+    metadata:
+      labels: { app: image-gen }
+    spec:
+      serviceAccountName: image-gen
+      containers:
+        - name: app
+          image: <your application image>
+          envFrom:
+            - configMapRef: { name: image-gen-config }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { memory: "1Gi" }

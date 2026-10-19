@@ -1,0 +1,13 @@
+ERNIE-Image on Amazon SageMaker: CloudShell installer
+Copyright (c) 2026 ernie-image-sagemaker contributors
+
+Code (ernie.sh, config.env, eks/*.py, eks/*.yaml, policies/*.json, .github/) is licensed under the
+Apache License, Version 2.0 (see LICENSE).
+
+Documentation (*.md) is licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+
+Not included and not covered by these licenses:
+- the ERNIE-Image model (baidu/ERNIE-Image on Hugging Face), downloaded by the SageMaker endpoint at start-up
+- the vLLM-Omni container image (AWS Deep Learning Containers), pulled from Amazon ECR
+Check their own license terms before use.

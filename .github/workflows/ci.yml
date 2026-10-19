@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: python -m pip install --quiet shellcheck-py ruff pyyaml boto3
+
+      - name: ShellCheck
+        run: shellcheck ernie.sh tests/smoke.sh
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Embedded Python in ernie.sh compiles
+        run: |
+          python - <<'EOF2'
+          import re
+          s = open("ernie.sh").read()
+          blocks = re.findall(r"python3 - <<'PY'.*?\n(.*?)\nPY\n", s, re.S)
+          assert blocks, "no embedded Python found"
+          for i, b in enumerate(blocks):
+              compile(b, f"ernie.sh:block{i}", "exec")
+          print(f"{len(blocks)} blocks compile")
+          EOF2
+
+      - name: JSON and YAML are valid
+        run: |
+          for f in policies/*.json; do python -m json.tool "$f" >/dev/null && echo "ok $f"; done
+          python -c "import yaml; list(yaml.safe_load_all(open('eks/k8s-example.yaml'))); print('ok eks/k8s-example.yaml')"
+
+      - name: Smoke test (offline, stub AWS CLI)
+        run: bash tests/smoke.sh
+
+      - name: Docs links
+        run: python tests/check_docs.py
